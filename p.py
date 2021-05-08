@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from prompt_toolkit import CommandLineInterface, Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.enums import DEFAULT_BUFFER
@@ -15,7 +17,8 @@ import model
 
 
 class MyControl(UIControl):
-    def __init__(self, m: model.Model):
+    def __init__(self, m):
+        # type: (model.Model) -> None
         self.m = m
         self.content = UIContent(
             get_line=self.get_line,
@@ -30,7 +33,7 @@ class MyControl(UIControl):
 
 
 class Tail:
-    def __init__(self, path: str):
+    def __init__(self, path):
         self.edit = False
         self.wrap = False
         self.numbers = True

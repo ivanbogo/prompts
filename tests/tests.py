@@ -4,13 +4,15 @@ import tempfile
 import model
 from p import Tail
 
+TEST_FILE = __file__
+
 
 class TestModel(unittest.TestCase):
     def test_load_and_bounds(self):
-        with model.Model('../venv/bin/activate') as m:
+        with model.Model(TEST_FILE) as m:
             for i in range(m.line_count()):
                 line = m.get_line(i)
-                self.assertIs(type(line), str)
+                self.assertIsInstance(line, (unicode, str))
 
             try:
                 m.get_line(m.line_count() + 1)
@@ -19,8 +21,7 @@ class TestModel(unittest.TestCase):
                 pass
 
     def test_contents(self):
-        path = '../venv/bin/activate'
-        with model.Model(path) as m, open(path) as f:
+        with model.Model(TEST_FILE) as m, open(TEST_FILE) as f:
             for i, line in enumerate(ll.rstrip('\n') for ll in f.readlines()):
                 read = m.get_line(i)
                 self.assertEqual(line, read)
@@ -39,9 +40,9 @@ class TestTail(unittest.TestCase):
     def test_status(self):
         from prompt_toolkit.token import Token
 
-        tail = Tail('../venv/bin/activate')
+        tail = Tail(TEST_FILE)
         self.assertEqual('n', tail.get_status())
         tokens = tail.get_status_tokens(None)
         for t in tokens:
             self.assertIsInstance(t[0], type(Token))
-            self.assertIsInstance(t[1], str)
+            self.assertIsInstance(t[1], (str, unicode))

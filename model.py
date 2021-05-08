@@ -2,7 +2,7 @@ import logging
 import sys
 import re
 
-logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
 class Model:
@@ -21,7 +21,7 @@ class Model:
                 break
 
             for i in range(len(read)):
-                if read[i] == 10:
+                if read[i:i+1] == b'\n':
                     self.lines.append(position + i + 1)
 
             position = position + len(read)
