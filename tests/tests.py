@@ -1,10 +1,14 @@
 import unittest
 import tempfile
+import logging
+import six
+import sys
 
 import model
 from p import Tail
 
-TEST_FILE = __file__
+TEST_FILE = six.text_type(__file__)
+logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
 class TestModel(unittest.TestCase):
@@ -12,7 +16,7 @@ class TestModel(unittest.TestCase):
         with model.Model(TEST_FILE) as m:
             for i in range(m.line_count()):
                 line = m.get_line(i)
-                self.assertIsInstance(line, (unicode, str))
+                self.assertIsInstance(line, six.text_type)
 
             try:
                 m.get_line(m.line_count() + 1)
@@ -41,8 +45,8 @@ class TestTail(unittest.TestCase):
         from prompt_toolkit.token import Token
 
         tail = Tail(TEST_FILE)
-        self.assertEqual('n', tail.get_status())
         tokens = tail.get_status_tokens(None)
+        tt = type(Token)
         for t in tokens:
-            self.assertIsInstance(t[0], type(Token))
-            self.assertIsInstance(t[1], (str, unicode))
+            self.assertIsInstance(t[0], tt)
+            self.assertIsInstance(t[1], six.text_type)

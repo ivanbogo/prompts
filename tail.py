@@ -15,6 +15,7 @@ from prompt_toolkit.layout.controls import BufferControl, TokenListControl, UICo
 from prompt_toolkit.layout.dimension import LayoutDimension as D
 
 from prompt_toolkit.shortcuts import create_eventloop
+from prompt_toolkit.styles import style_from_dict
 from prompt_toolkit.token import Token
 from prompt_toolkit.application import Application
 from prompt_toolkit.enums import DEFAULT_BUFFER
@@ -29,7 +30,7 @@ wrapping = Condition(lambda cli: wrap)
 
 
 def get_line(i):
-    return [(Token.LineNumber, str(i)), (Token.Sep, ', '), (Token.Title, 50 * ' (Hello, World) ')]
+    return [(Token.LineNumber, "%04d" % i), (Token.Title, 50 * '(Hello, World) ')]
 
 
 content = UIContent(
@@ -135,9 +136,11 @@ buffers = {
     DEFAULT_BUFFER: Buffer(is_multiline=False, accept_action=AcceptAction(handler=accept)),
 }
 
+style = style_from_dict({Token.LineNumber: 'bg:#ansiblue'})
 
 application = Application(
     layout=layout,
+    style=style,
     buffers=buffers,
     key_bindings_registry=registry,
     use_alternate_screen=True)

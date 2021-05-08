@@ -1,20 +1,21 @@
 import logging
-import sys
 import re
-
-logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
 class Model:
     def __init__(self, path):
+        self.wrap = False
+        self.numbers = True
+        self.marks = dict()
+        self.line = 0
         self.path = path
-        self.fd = open(path, 'rb')
+        self.f = open(path, 'rb')
 
         chunk = 4096
         position = 0
         self.lines = [0]
         while True:
-            read = self.fd.read(chunk)
+            read = self.f.read(chunk)
             if not read:
                 if position > self.lines[-1]:
                     self.lines.append(position + 1)
@@ -32,14 +33,14 @@ class Model:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.fd.close()
+        self.f.close()
 
     def get_line(self, i):
         assert 0 <= i < self.line_count()
 
-        self.fd.seek(self.lines[i])
+        self.f.seek(self.lines[i])
         count = self.lines[i + 1] - self.lines[i] - 1
-        return self.fd.read(count).decode('utf-8')
+        return self.f.read(count).decode('utf-8')
 
     def line_count(self):
         return len(self.lines) - 1

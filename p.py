@@ -1,24 +1,27 @@
 from __future__ import unicode_literals
 
 from prompt_toolkit import CommandLineInterface, Application
-from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.enums import DEFAULT_BUFFER
-from prompt_toolkit.filters import Condition
-from prompt_toolkit.key_binding.defaults import load_key_bindings
 from prompt_toolkit.layout import HSplit, Window, TokenListControl, BufferControl
+from prompt_toolkit.layout.dimension import LayoutDimension
 from prompt_toolkit.layout.controls import UIContent, UIControl
 from prompt_toolkit.layout.screen import Point
+
+from prompt_toolkit.enums import DEFAULT_BUFFER
+from prompt_toolkit.buffer import Buffer
+
+from prompt_toolkit.filters import Condition
+from prompt_toolkit.key_binding.defaults import load_key_bindings
+from prompt_toolkit.keys import Keys
+
 from prompt_toolkit.shortcuts import create_eventloop
 from prompt_toolkit.styles import style_from_dict
 from prompt_toolkit.token import Token
-from prompt_toolkit.layout.dimension import LayoutDimension
 
 import model
 
 
 class MyControl(UIControl):
     def __init__(self, m):
-        # type: (model.Model) -> None
         self.m = m
         self.content = UIContent(
             get_line=self.get_line,
@@ -26,7 +29,10 @@ class MyControl(UIControl):
             show_cursor=True)
 
     def get_line(self, i):
-        return [(Token.Text, self.m.get_line(i))]
+        if self.m.numbers:
+            return [(Token.LineNumber, '%03d ' % i), (Token.Text, self.m.get_line(i))]
+        else:
+            return [(Token.Text, self.m.get_line(i))]
 
     def create_content(self, cli, width, height):
         return self.content
@@ -35,20 +41,19 @@ class MyControl(UIControl):
 class Tail:
     def __init__(self, path):
         self.edit = False
-        self.wrap = False
-        self.numbers = True
-        self.marks = dict()
-        self.line = 0
 
         self.model = model.Model(path)
         self.style = style_from_dict({
             Token.CursorLine: 'reverse',
         })
 
+        self.wrapping = Condition(lambda cli: self.model.wrap)
+        self.editing = Condition(lambda cli: self.edit)
+
         self.main = Window(
             content=MyControl(self.model),
             cursorline=True,
-            wrap_lines=Condition(lambda cli: self.wrap))
+            wrap_lines=self.wrapping)
 
         self.status = Window(
             height=LayoutDimension.exact(1),
@@ -58,30 +63,31 @@ class Tail:
 
         self.command = Window(
             height=LayoutDimension.exact(1),
-            content=BufferControl(buffer_name=DEFAULT_BUFFER))
+            content=BufferControl(buffer_name=DEFAULT_BUFFER),
+            allow_scroll_beyond_bottom=True)
 
         self.layout = HSplit([self.main, self.status, self.command])
 
-        bindings = load_key_bindings(enable_abort_and_exit_bindings=True, enable_system_bindings=True)
-        bindings.add_binding('j')(self.down)
-        bindings.add_binding('k')(self.up)
+        bindings = self.load_bindings()
 
         self.application = Application(
             layout=self.layout,
             style=self.style,
             use_alternate_screen=True,
-            buffer=Buffer(is_multiline=False),
+            buffer=Buffer(is_multiline=False, read_only=Condition(lambda: not self.edit)),
             key_bindings_registry=bindings)
 
     def get_status_tokens(self, cli):
-        return [
-            (Token.Status, self.get_status()),
-            (Token.Text, ' : '),
-            (Token.LineNumber, '%04d' % self.line)
-        ]
+        status = ''.join([c[1] for c in (
+            (self.edit, 'e'), (self.model.wrap, 'w'), (self.model.numbers, 'n')) if c[0]])
 
-    def get_status(self):
-        return ''.join([c[1] for c in ((self.edit, 'e'), (self.wrap, 'w'), (self.numbers, 'n')) if c[0]])
+        return [
+            (Token.Status, status),
+            (Token.Text, ' '),
+            (Token.Text, self.model.path),
+            (Token.Text, ': '),
+            (Token.LineNumber, '%d/%d' % (self.model.line, self.model.line_count()))
+        ]
 
     def run(self):
         eventloop = create_eventloop()
@@ -92,15 +98,54 @@ class Tail:
             eventloop.close()
 
     def scroll(self, count):
-        self.main.vertical_scroll += count
-        self.line = self.main.vertical_scroll
-        self.main.content.content.cursor_position = Point(self.main.vertical_scroll, 0)
+        y = self.model.line = max(0, min(self.model.line_count(), self.model.line + count))
+        self.main.content.content.cursor_position = Point(y, 0)
+        self.main.vertical_scroll = y
 
-    def down(self, event):
-        self.scroll(1)
+    def move_cursor(self, count):
+        y = self.model.line = max(0, min(self.model.line_count(), self.model.line + count))
+        self.main.content.content.cursor_position = Point(y, 0)
 
-    def up(self, event):
-        self.scroll(-1)
+        if not self.main.render_info:
+            return
+
+        w = self.main
+        info = w.render_info
+
+        if y > w.vertical_scroll + info.window_height or y < w.vertical_scroll:
+            w.vertical_scroll = y
+
+    def load_bindings(self):
+        bindings = load_key_bindings(enable_abort_and_exit_bindings=True, enable_system_bindings=True)
+
+        @bindings.add_binding('j', filter=~self.editing)
+        def down(event): self.scroll(1)
+
+        @bindings.add_binding('k', filter=~self.editing)
+        def up(event): self.scroll(-1)
+
+        @bindings.add_binding('d', filter=~self.editing)
+        def c_d(event): self.move_cursor(20)
+
+        @bindings.add_binding('u', filter=~self.editing)
+        def c_u(event): self.move_cursor(-20)
+
+        @bindings.add_binding('w', filter=~self.editing)
+        def toggle_wrap(event): self.model.wrap = not self.model.wrap
+
+        @bindings.add_binding('n', filter=~self.editing)
+        def toggle_numbers(event): self.model.numbers = not self.model.numbers
+
+        @bindings.add_binding('q', filter=~self.editing)
+        def end_loop(event): event.cli.set_return_value(None)
+
+        @bindings.add_binding('/', filter=~self.editing)
+        def start_edit(event): self.edit = True
+
+        @bindings.add_binding(Keys.ControlC)
+        def end_edit(event): self.edit = False
+
+        return bindings
 
 
 if __name__ == '__main__':
